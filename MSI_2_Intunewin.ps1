@@ -1,76 +1,87 @@
-# Define the paths
-$msiFolder = "C:\Users\croucherm\Desktop\Intune\MSI"
-$outputFolder = "C:\Users\croucherm\Desktop\Intune\Intunewin"
-$processedFolder = "C:\Users\croucherm\Desktop\Intune\ProcessedMSIs"
-$util = "C:\Users\croucherm\Desktop\Intune\IntuneWinAppUtil.exe"
-$logFile = "C:\Users\croucherm\Desktop\Intune\IntunePackagingLog.txt"
+# Add-Type for Windows Forms
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 
-# Create required folders if they don't exist
-foreach ($path in @($msiFolder, $outputFolder, $processedFolder)) {
-    if (-not (Test-Path $path)) {
-        New-Item -Path $path -ItemType Directory | Out-Null
+# Create Form
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "MSI to IntuneWin Converter"
+$form.Size = New-Object System.Drawing.Size(600, 400)
+$form.StartPosition = "CenterScreen"
+
+# Folder Browser Dialog
+$folderBrowserDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+
+# Define Controls
+$labelMsiFolder = New-Object System.Windows.Forms.Label
+$labelMsiFolder.Text = "MSI Folder:"
+$labelMsiFolder.Location = New-Object System.Drawing.Point(20, 20)
+$labelMsiFolder.Size = New-Object System.Drawing.Size(100, 20)
+
+$textBoxMsiFolder = New-Object System.Windows.Forms.TextBox
+$textBoxMsiFolder.Location = New-Object System.Drawing.Point(120, 20)
+$textBoxMsiFolder.Size = New-Object System.Drawing.Size(350, 20)
+
+$buttonBrowseMsiFolder = New-Object System.Windows.Forms.Button
+$buttonBrowseMsiFolder.Text = "Browse"
+$buttonBrowseMsiFolder.Location = New-Object System.Drawing.Point(480, 20)
+$buttonBrowseMsiFolder.Size = New-Object System.Drawing.Size(75, 20)
+$buttonBrowseMsiFolder.Add_Click({
+    if ($folderBrowserDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        $textBoxMsiFolder.Text = $folderBrowserDialog.SelectedPath
     }
-}
+})
 
-# Logging function
-function Write-Log {
-    param ([string]$message)
-    $timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-    $fullMessage = "$timestamp - $message"
-    $fullMessage | Out-File -Append -FilePath $logFile
-    Write-Host $fullMessage
-}
+$labelOutputFolder = New-Object System.Windows.Forms.Label
+$labelOutputFolder.Text = "Output Folder:"
+$labelOutputFolder.Location = New-Object System.Drawing.Point(20, 60)
+$labelOutputFolder.Size = New-Object System.Drawing.Size(100, 20)
 
-# Get all MSI files
-$msiFiles = Get-ChildItem -Path $msiFolder -Filter *.msi
-$total = $msiFiles.Count
-$successCount = 0
-$failureCount = 0
+$textBoxOutputFolder = New-Object System.Windows.Forms.TextBox
+$textBoxOutputFolder.Location = New-Object System.Drawing.Point(120, 60)
+$textBoxOutputFolder.Size = New-Object System.Drawing.Size(350, 20)
 
-Write-Log "========== Intune Win32 Packaging Started =========="
-Write-Log "Total files found: $total"
-Write-Log "Tool path: $util"
-Write-Log "Output folder: $outputFolder"
-Write-Log "----------------------------------------------------"
-
-# Loop through MSI files
-for ($i = 0; $i -lt $total; $i++) {
-    $msiFile = $msiFiles[$i]
-    $fileNumber = $i + 1
-    Write-Log "[$fileNumber of $total] Processing: $($msiFile.Name)"
-
-    $outputFile = Join-Path $outputFolder ([System.IO.Path]::GetFileNameWithoutExtension($msiFile) + ".intunewin")
-    $args = "-c `"$msiFolder`" -s `"$($msiFile.Name)`" -o `"$outputFolder`""
-
-    try {
-        Write-Log "Running: $util $args"
-        $process = Start-Process -FilePath $util -ArgumentList $args -Wait -PassThru -NoNewWindow
-
-        if ($process.ExitCode -eq 0) {
-            if (Test-Path $outputFile) {
-                $size = (Get-Item $outputFile).Length
-                Write-Log "Success: $($msiFile.Name) → $([Math]::Round($size / 1MB, 2)) MB"
-                Move-Item -Path $msiFile.FullName -Destination $processedFolder
-                Write-Log "Moved to: $processedFolder"
-                $successCount++
-            } else {
-                Write-Log "Warning: No output created for $($msiFile.Name)"
-                $failureCount++
-            }
-        } else {
-            Write-Log "Error: Exit code $($process.ExitCode) for $($msiFile.Name)"
-            $failureCount++
-        }
+$buttonBrowseOutputFolder = New-Object System.Windows.Forms.Button
+$buttonBrowseOutputFolder.Text = "Browse"
+$buttonBrowseOutputFolder.Location = New-Object System.Drawing.Point(480, 60)
+$buttonBrowseOutputFolder.Size = New-Object System.Drawing.Size(75, 20)
+$buttonBrowseOutputFolder.Add_Click({
+    if ($folderBrowserDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        $textBoxOutputFolder.Text = $folderBrowserDialog.SelectedPath
     }
-    catch {
-        Write-Log "Exception while processing $($msiFile.Name): $($_.Exception.Message)"
-        $failureCount++
+})
+
+$buttonStart = New-Object System.Windows.Forms.Button
+$buttonStart.Text = "Start Conversion"
+$buttonStart.Location = New-Object System.Drawing.Point(20, 100)
+$buttonStart.Size = New-Object System.Drawing.Size(200, 30)
+$buttonStart.Add_Click({
+    $msiFolder = $textBoxMsiFolder.Text
+    $outputFolder = $textBoxOutputFolder.Text
+
+    if (-not (Test-Path $msiFolder)) {
+        [System.Windows.Forms.MessageBox]::Show("Please select a valid MSI folder.", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        return
     }
 
-    Write-Log "----------------------------------------------------"
-}
+    if (-not (Test-Path $outputFolder)) {
+        [System.Windows.Forms.MessageBox]::Show("Please select a valid output folder.", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        return
+    }
 
-Write-Log "All done!"
-Write-Log "Successes: $successCount"
-Write-Log "Failures: $failureCount"
-Write-Log "========== Intune Win32 Packaging Complete =========="
+    # Run the packaging script logic
+    Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSScriptRoot\MSI_2_Intunewin.ps1`" -msiFolder `"$msiFolder`" -outputFolder `"$outputFolder`"" -NoNewWindow
+    [System.Windows.Forms.MessageBox]::Show("Conversion started!", "Info", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+})
+
+# Add Controls to Form
+$form.Controls.Add($labelMsiFolder)
+$form.Controls.Add($textBoxMsiFolder)
+$form.Controls.Add($buttonBrowseMsiFolder)
+$form.Controls.Add($labelOutputFolder)
+$form.Controls.Add($textBoxOutputFolder)
+$form.Controls.Add($buttonBrowseOutputFolder)
+$form.Controls.Add($buttonStart)
+
+# Show Form
+$form.Add_Shown({ $form.Activate() })
+[void] $form.ShowDialog()
